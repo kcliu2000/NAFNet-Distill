@@ -1,9 +1,22 @@
-.DS_Store
-.idea/*
-experiments
-logs/
-*results*
-*__pycache__*
-*.sh
-datasets
-basicsr.egg-info
+# 📦 排除巨型資料集
+dataset/
+datasets/
+
+# 🏋️ 排除實驗產出的權重、狀態檔與圖片
+experiments/
+*.pth
+*.pt
+*.state
+*.lmdb
+
+# 📊 排除訓練 Log 與暫存檔
+wandb/
+tb_logger/
+*.log
+distill_*.log
+
+# 🐍 Python 系統生成的垃圾檔
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Storelogs/

@@ -1,0 +1,92 @@
+name: NAFNet_Student_ExpB_OutputKD
+model_type: NAFNetDistillationModel
+scale: 1
+num_gpu: 1
+manual_seed: 42
+
+datasets:
+  train:
+    name: gopro-train
+    type: PairedImageDataset
+    dataroot_gt: /home/m11302124/MIMO-UNet-Wavelet/dataset/GOPRO/train_lmdb/sharp_crops.lmdb
+    dataroot_lq: /home/m11302124/MIMO-UNet-Wavelet/dataset/GOPRO/train_lmdb/blur_crops.lmdb
+    io_backend:
+      type: lmdb
+    gt_size: 256
+    use_flip: true
+    use_rot: true
+    use_shuffle: true
+    num_worker_per_gpu: 8
+    batch_size_per_gpu: 4   # NAFNet 是輕量 CNN，VRAM 吃很少，8 絕對沒問題
+    dataset_enlarge_ratio: 1
+  val:
+    name: gopro-test
+    type: PairedImageDataset
+    dataroot_gt: /home/m11302124/MIMO-UNet-Wavelet/dataset/GOPRO/test/sharp
+    dataroot_lq: /home/m11302124/MIMO-UNet-Wavelet/dataset/GOPRO/test/blur
+    io_backend:
+      type: disk
+
+# 🔪 輕量化學生 (區塊精準砍半)
+network_g:
+  type: NAFNet
+  width: 64
+  enc_blk_nums: [1, 1, 1, 14]
+  middle_blk_num: 1
+  dec_blk_nums: [1, 1, 1, 1]
+
+# 👑 滿血版老師 (官方 GoPro 結構)
+network_teacher:
+  type: NAFNet
+  width: 64
+  enc_blk_nums: [1, 1, 1, 28]
+  middle_blk_num: 1
+  dec_blk_nums: [1, 1, 1, 1]
+
+path:
+  pretrain_network_g: ~
+  strict_load_g: true
+  pretrain_network_teacher: experiments/pretrained_models/NAFNet-GoPro-width64.pth 
+
+train:
+  optim_g:
+    type: AdamW
+    lr: !!float 1e-3
+    weight_decay: 0
+    betas: [0.9, 0.9]
+  scheduler:
+    type: TrueCosineAnnealingLR
+    T_max: 400000   # 🚀 快速驗證 10 萬步
+    eta_min: !!float 1e-7
+  total_iter: 400000
+  warmup_iter: -1
+
+  pixel_opt:
+    type: PSNRLoss
+    loss_weight: 1.0
+    reduction: mean
+    
+  # 🟢 蒸餾核心控制
+  kd_weight: 0.5
+  use_wavelet_kd: False
+  wavelet_kd_weight: 0.5
+
+val:
+  val_freq: !!float 10000
+  save_img: false
+  metrics:
+    psnr:
+      type: calculate_psnr
+      crop_border: 0
+      test_y_channel: false
+    ssim:
+      type: calculate_ssim
+      crop_border: 0
+      test_y_channel: false
+
+logger:
+  print_freq: 200
+  save_checkpoint_freq: !!float 10000
+  use_tb_logger: true
+  wandb:
+    project: NAFNet_Distill_Project
