@@ -1,5 +1,4 @@
 import sys
-import os
 from os import path as osp
 # 直接將根目錄加入系統路徑，徹底解決 ModuleNotFoundError
 sys.path.append(osp.abspath(osp.join(osp.dirname(__file__), '..')))
@@ -8,7 +7,6 @@ import logging
 import torch
 import numpy as np
 from tqdm import tqdm
-import cv2  # 👈 新增：用來存圖
 
 # 匯入指標計算套件
 import lpips
@@ -50,14 +48,13 @@ def main():
     print("===> Loading LPIPS model...")
     loss_fn_lpips = lpips.LPIPS(net='alex').cuda()
 
-    # 👇 檢查 YAML 裡是否有要求存圖
-    save_img_flag = opt['val'].get('save_img', False)
-
     for test_loader in test_loaders:
         test_set_name = test_loader.dataset.opt['name']
         logger.info(f'Testing {test_set_name}...')
         
+        # 自動抓取 results_root，如果沒有設定就預設放在 results/實驗名稱 下
         result_dir = opt['path'].get('results_root', f"./results/{opt['name']}")
+        
         psnr_list, ssim_list, lpips_list = [], [], []
 
         model.net_g.eval()
@@ -69,15 +66,18 @@ def main():
                 visuals = model.get_current_visuals()
                 pred = visuals['result'].cuda()
                 gt = visuals['gt'].cuda()
+                
                 pred_clip = torch.clamp(pred, 0, 1)
 
                 img_path = val_data.get('lq_path', ['unknown'])[0]
                 name = osp.splitext(osp.basename(img_path))[0]
 
+                # 計算 LPIPS (-1 到 1)
                 img_gt_lpips = gt * 2.0 - 1.0
                 img_rest_lpips = pred_clip * 2.0 - 1.0
                 lpips_score = loss_fn_lpips(img_rest_lpips, img_gt_lpips).item()
 
+                # 計算 PSNR & SSIM (0 到 1, HWC, Numpy)
                 pred_np = pred_clip.squeeze(0).cpu().numpy().transpose((1, 2, 0))
                 gt_np = gt.squeeze(0).cpu().numpy().transpose((1, 2, 0))
 
@@ -88,18 +88,8 @@ def main():
                 ssim_list.append(ssim_score)
                 lpips_list.append(lpips_score)
 
-                # =================== 👇 存圖邏輯 👇 ===================
-                if save_img_flag:
-                    # 強制存到 gopro-test 以符合你的畫圖腳本路徑
-                    save_dir = osp.join(result_dir, 'visualization', 'gopro-test')
-                    os.makedirs(save_dir, exist_ok=True)
-                    save_img_path = osp.join(save_dir, f"{name}.png")
-                    
-                    # 將 0~1 的 RGB Numpy 轉為 0~255 的 BGR 供 OpenCV 儲存
-                    save_img = (pred_np * 255.0).round().astype(np.uint8)
-                    save_img = cv2.cvtColor(save_img, cv2.COLOR_RGB2BGR)
-                    cv2.imwrite(save_img_path, save_img)
-                # ==========================================================
+                with open(osp.join(result_dir, 'psnr_ssim_lpips.txt'), 'a') as f:
+                    f.write(f"{name} ----> PSNR: {psnr_score:.4f}, SSIM: {ssim_score:.4f}, LPIPS: {lpips_score:.4f}\n")
 
         avg_psnr = np.mean(psnr_list)
         avg_ssim = np.mean(ssim_list)
@@ -107,10 +97,13 @@ def main():
 
         print("\n" + "="*50)
         print(f"🏆 Final Results for NAFNet {opt['name']} ({len(test_loader)} images):")
-        print(f"   => PSNR  : {avg_psnr:.4f}")
-        print(f"   => SSIM  : {avg_ssim:.4f}")
-        print(f"   => LPIPS : {avg_lpips:.4f}")
+        print(f"   => PSNR  (越大越好) : {avg_psnr:.4f}")
+        print(f"   => SSIM  (越大越好) : {avg_ssim:.4f}")
+        print(f"   => LPIPS (越小越好) : {avg_lpips:.4f}")
         print("="*50 + "\n")
+
+        with open(osp.join(result_dir, 'psnr_ssim_lpips.txt'), 'a') as f:
+            f.write(f"\n[FINAL AVERAGE] PSNR: {avg_psnr:.4f}, SSIM: {avg_ssim:.4f}, LPIPS: {avg_lpips:.4f}\n")
 
 if __name__ == '__main__':
     main()

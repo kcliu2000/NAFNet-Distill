@@ -1,0 +1,49 @@
+# ---------------------------------------------------------
+# NAFNet 蒸餾學生模型 測試設定檔
+# ---------------------------------------------------------
+name: NAFNet_Test_ExpC_WaveletKD  # 🌟 每次測試不同模型時，請修改這個名字
+model_type: ImageRestorationModel  # 注意：測試時只需標準還原模型，不需 DistillationModel
+scale: 1
+num_gpu: 1
+manual_seed: 42
+
+datasets:
+  test:
+    name: gopro-test
+    type: PairedImageDataset
+    
+    # 👇 確保這裡的路徑與你伺服器上的測試集路徑一致
+    #dataroot_gt: /home/m11302124/MIMO-UNet-Wavelet/dataset/GOPRO/test/sharp
+    #dataroot_lq: /home/m11302124/MIMO-UNet-Wavelet/dataset/GOPRO/test/blur
+    
+    # 👇 把這裡改成剛剛建立的迷你資料夾路徑
+    dataroot_gt: /home/m11302124/MIMO-UNet-Wavelet/dataset/GOPRO_6imgs/test/sharp
+    dataroot_lq: /home/m11302124/MIMO-UNet-Wavelet/dataset/GOPRO_6imgs/test/blur
+    io_backend:
+      type: disk
+
+# 🌟 貼上學生模型 (Student) 的架構參數
+network_g:
+  type: NAFNet
+  width: 64
+  enc_blk_nums: [1, 1, 1, 14]   # 學生的深度
+  middle_blk_num: 1
+  dec_blk_nums: [1, 1, 1, 1]
+
+path:
+  # 🌟 替換成你要測試的具體權重路徑 (.pth)
+  pretrain_network_g: /home/m11302124/NAFNet/experiments/NAFNet_Student_ExpC_WaveletKD/models/net_g_latest.pth
+  strict_load_g: true
+  results_root: ./results/NAFNet_ExpC 
+
+val:
+  save_img: true # 📸 設為 true 時，會將復原後的圖片存下來供論文對比使用
+  metrics:
+    psnr:
+      type: calculate_psnr
+      crop_border: 0
+      test_y_channel: false
+    ssim:
+      type: calculate_ssim
+      crop_border: 0
+      test_y_channel: false

@@ -14,17 +14,26 @@ class HaarWaveletKDLoss(torch.nn.Module):
         h1 = torch.tensor([[1/2, 1/2], [-1/2, -1/2]]).view(1, 1, 2, 2)
         h2 = torch.tensor([[1/2, -1/2], [1/2, -1/2]]).view(1, 1, 2, 2)
         h3 = torch.tensor([[1/2, -1/2], [-1/2, 1/2]]).view(1, 1, 2, 2)
+        # 疊加並複製給 RGB 三個通道 (形狀: [12, 1, 2, 2])
         filters = torch.cat([h0, h1, h2, h3], dim=0).repeat(3, 1, 1, 1)
         self.register_buffer('filters', filters)
 
     def forward(self, student_img, teacher_img):
+        # 使用 groups=3 進行高效小波轉換
         stu_wav = F.conv2d(student_img, self.filters, stride=2, groups=3)
         tea_wav = F.conv2d(teacher_img, self.filters, stride=2, groups=3)
-        stu_LL, stu_H = stu_wav[:, 0:3, :, :], stu_wav[:, 3:, :, :]
-        tea_LL, tea_H = tea_wav[:, 0:3, :, :], tea_wav[:, 3:, :, :]
-        loss_LL = F.l1_loss(stu_LL, tea_LL)
-        loss_H = F.l1_loss(stu_H, tea_H)
-        return loss_LL + self.hf_weight * loss_H
+        
+        # 計算 L1 絕對誤差矩陣
+        diff = torch.abs(stu_wav - tea_wav)
+        
+        # 建立權重矩陣：預設所有頻帶都乘上高頻權重 (hf_weight)
+        weights = torch.ones_like(diff) * self.hf_weight
+        
+        # 🚨 關鍵修正：精準挑出 R, G, B 的 LL 頻帶 (索引 0, 4, 8)，將權重設回 1.0
+        weights[:, [0, 4, 8], :, :] = 1.0 
+        
+        # 回傳加權後的平均誤差
+        return torch.mean(diff * weights)
 
 # 📌 NAFNet 通用型蒸餾框架
 class NAFNetDistillationModel(ImageRestorationModel):
