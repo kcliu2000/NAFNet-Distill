@@ -1,4 +1,4 @@
-name: NAFNet_Student_ExpB_OutputKD
+name: NAFNet_Student_ExpC_WaveletKD_fixed
 model_type: NAFNetDistillationModel
 scale: 1
 num_gpu: 1
@@ -68,7 +68,7 @@ train:
     
   # 🟢 蒸餾核心控制
   kd_weight: 0.5
-  use_wavelet_kd: False
+  use_wavelet_kd: True
   wavelet_kd_weight: 0.5
 
 val:
