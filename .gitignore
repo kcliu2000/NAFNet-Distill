@@ -20,3 +20,6 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 .DS_Storelogs/
+
+
+results/

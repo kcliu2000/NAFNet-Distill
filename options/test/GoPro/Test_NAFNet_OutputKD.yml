@@ -1,0 +1,49 @@
+# ---------------------------------------------------------
+# NAFNet ExpC 訓練集批次推論設定檔 (for DiffBIR)
+# ---------------------------------------------------------
+name: NAFNet-OutputKD-GoPro-TestSet-Inference
+model_type: ImageRestorationModel
+scale: 1
+num_gpu: 1
+manual_seed: 42
+
+datasets:
+  test_1:  # NAFNet/Basicsr 的 test 模式支援多個 dataset，通常命名為 test_1, test_2
+    name: GoPro-Train-Blur
+    type: PairedImageDataset
+    dataroot_gt: /home/m11302124/MIMO-UNet-Wavelet/dataset/GOPRO/test/sharp
+    dataroot_lq: /home/m11302124/MIMO-UNet-Wavelet/dataset/GOPRO/test/blur
+    
+    io_backend:
+      type: disk
+
+# 🌟 關鍵修改 2：網路架構名稱
+network_g:
+  type: NAFNet  # NAFNet 官方開源庫通常使用 NAFNetLocal 而非 NAFNet
+  width: 64
+  enc_blk_nums: [1, 1, 1, 14]   # 你的 ExpC 學生模型深度
+  middle_blk_num: 1
+  dec_blk_nums: [1, 1, 1, 1]
+
+path:
+  # 🌟 關鍵修改 3：確認權重路徑
+  # 請確認這個 latest.pth 是你訓練出來最好的那包
+  pretrain_network_g: /home/m11302124/Thesis/NAFNet/final_models/output_kd/net_g_latest.pth
+  strict_load_g: true
+  
+  # 🌟 關鍵修改 4：直接指定輸出目錄
+  # Basicsr 預設會把圖片存在 results/{name}/visualization/{dataset_name}/ 下
+  results_root: ./results/NAFNet-OutputKD-GoPro-TestSet-Inference
+
+val:
+  save_img: true # 📸 務必設為 true，這樣才會輸出推論圖片給 DiffBIR 用
+  metrics:
+    # 推論訓練集時其實不需要算 PSNR/SSIM，但保留著也沒關係，可以順便看看
+    psnr:
+      type: calculate_psnr
+      crop_border: 0
+      test_y_channel: false
+    ssim:
+      type: calculate_ssim
+      crop_border: 0
+      test_y_channel: false
